@@ -15,8 +15,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173", // Allow local development
-      "https://hubert-hits-front-git-main-antoine-ls-projects.vercel.app", // Allow deployed frontend
-      "https://hubert-hits-front-git-main-antoine-ls-projects-8b403535.vercel.app/",
+      "https://hubert-hits-front.vercel.app/",
     ],
   })
 );
