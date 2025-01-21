@@ -1,76 +1,85 @@
-// Load environment variables from .env
+// Import dependencies
 require("dotenv").config();
-
 const express = require("express");
 const mongoose = require("mongoose");
-const app = express();
+const cors = require("cors");
 
 const Restaurants = require("./models/Restaurant");
+const cuisineCategories = require("./models/cuisineMapping");
 
-// Middleware to parse JSON
+const app = express();
+
+// Middleware
 app.use(express.json());
+app.use(cors({ origin: "http://localhost:5173" }));
 
-// Connect to MongoDB
-const connectionString = process.env.MONGO_URI;
-
+// MongoDB Connection
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("Connected to MongoDB"))
   .catch((err) => console.error("MongoDB connection error:", err));
 
-// Basic route to test the server
-app.get("/", (req, res) => {
-  res.send("Server is running!");
-});
-
-// Start the server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Routes
+app.get("/", (req, res) => res.send("Server is running!"));
 
 app.get("/restaurants", async (req, res) => {
   try {
-    const { name, cuisine, borough, grade, page = 1, limit = 20 } = req.query;
+    const {
+      name,
+      cuisine,
+      borough,
+      grade,
+      category,
+      page = 1,
+      limit = 20,
+      sortBy,
+      order = "asc",
+    } = req.query;
 
-    let filter = {}; // Start with an empty filter
+    let filter = {};
 
-    // Case-insensitive search for restaurant name
-    if (name) {
-      filter.name = { $regex: name, $options: "i" }; // Match name with regex (case-insensitive)
+    // Filters
+    if (name) filter.name = { $regex: name, $options: "i" }; // Case-insensitive name search
+    if (cuisine) filter.cuisine = { $in: cuisine.split(",") }; // Cuisine filter
+    if (borough) filter.borough = { $in: borough.split(",") }; // Borough filter
+    if (grade) filter["grades.grade"] = { $in: grade.split(",") }; // Grade filter
+
+    // Category Filter
+    if (category) {
+      const selectedCategories = category.split(",");
+      const cuisinesInCategories = selectedCategories.flatMap(
+        (cat) => cuisineCategories[cat] || []
+      );
+      if (cuisinesInCategories.length > 0) {
+        filter.cuisine = { $in: cuisinesInCategories };
+      } else {
+        return res.status(400).json({ error: "Invalid categories selected" });
+      }
     }
 
-    // Filter by cuisine
-    if (cuisine) {
-      const cuisinesArray = cuisine.split(",");
-      filter.cuisine = { $in: cuisinesArray };
-    }
+    // Pagination
+    const skip = (Number(page) - 1) * Number(limit);
 
-    // Filter by borough
-    if (borough) {
-      const boroughsArray = borough.split(",");
-      filter.borough = { $in: boroughsArray };
-    }
+    // Sorting Logic
+    const sortField =
+      sortBy === "averageRating" ? "averageRating" : sortBy || "name";
+    const sortOrder = order === "desc" ? -1 : 1;
 
-    // Filter by grade
-    if (grade) {
-      const gradesArray = grade.split(",");
-      filter["grades.grade"] = { $in: gradesArray }; // Nested field in MongoDB
-    }
+    // MongoDB Aggregation Pipeline
+    const aggregationPipeline = [
+      { $match: filter }, // Apply filters
+      { $addFields: { averageRating: { $avg: "$grades.score" } } }, // Calculate average rating
+      { $sort: { [sortField]: sortOrder } }, // Apply sorting
+      { $skip: skip }, // Apply pagination (skip)
+      { $limit: Number(limit) }, // Apply pagination (limit)
+    ];
 
-    // Pagination logic
-    const skip = (Number(page) - 1) * Number(limit); // Skip calculation
+    const restaurants = await Restaurants.aggregate(aggregationPipeline);
 
-    // Query with filters and pagination
-    const restaurants = await Restaurants.find(filter)
-      .limit(Number(limit)) // Limit results per page
-      .skip(skip) // Skip documents for the current page
-      .exec();
-
-    // Get total count for pagination metadata
+    // Count Total Matching Documents
     const total = await Restaurants.countDocuments(filter);
 
-    // Response with restaurants and pagination info
+    // Response
     res.json({
       restaurants,
       totalPages: Math.ceil(total / limit),
@@ -82,3 +91,18 @@ app.get("/restaurants", async (req, res) => {
     res.status(500).send("Error fetching restaurants");
   }
 });
+
+app.get("/categories", async (req, res) => {
+  try {
+    // Get category names (keys of cuisineCategories)
+    const categories = Object.keys(cuisineCategories);
+    res.json({ count: categories.length, categories });
+  } catch (error) {
+    console.error("Error fetching categories:", error);
+    res.status(500).send("Error fetching categories");
+  }
+});
+
+// Start Server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

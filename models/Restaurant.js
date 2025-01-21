@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 // Define the schema
 const restaurantSchema = new mongoose.Schema({
@@ -21,7 +21,19 @@ const restaurantSchema = new mongoose.Schema({
   restaurant_id: String, // Unique restaurant ID
 });
 
-// Create the model
-const Restaurant = mongoose.model('Restaurant', restaurantSchema);
+// Define the virtual field for average rating
+restaurantSchema.virtual("averageRating").get(function () {
+  if (this.grades && this.grades.length > 0) {
+    const totalScore = this.grades.reduce((sum, grade) => sum + grade.score, 0);
+    return totalScore / this.grades.length;
+  }
+  return 0; // Default if no grades exist
+});
 
+// Ensure virtuals are included in the output when converting to JSON
+restaurantSchema.set("toJSON", { virtuals: true });
+restaurantSchema.set("toObject", { virtuals: true });
+
+// Create and export the model
+const Restaurant = mongoose.model("Restaurant", restaurantSchema);
 module.exports = Restaurant;
