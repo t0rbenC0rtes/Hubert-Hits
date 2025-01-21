@@ -15,8 +15,11 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173", // Allow local development
-      "https://hubert-hits-front.vercel.app/",
+      "https://hubert-hits-front.vercel.app", // Deployed frontend (without trailing slash)
     ],
+    methods: ["GET", "POST", "PUT", "DELETE"], // Allow specific HTTP methods
+    allowedHeaders: ["Content-Type", "Authorization"], // Allow headers
+    credentials: true,
   })
 );
 
