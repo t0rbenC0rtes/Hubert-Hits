@@ -11,7 +11,14 @@ const app = express();
 
 // Middleware
 app.use(express.json());
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173", // Allow local development
+      "https://hubert-hits-front-git-main-antoine-ls-projects.vercel.app", // Allow deployed frontend
+    ],
+  })
+);
 
 // MongoDB Connection
 mongoose
